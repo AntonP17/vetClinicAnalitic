@@ -29,18 +29,6 @@ public class VisitStatus {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm")
     private LocalDateTime historyDate;
 
-//    @Column(nullable = false)
-//    @Enumerated(EnumType.STRING)
-//    private Status doctorStatus;
-//
-//    @Column(nullable = false)
-//    @Enumerated(EnumType.STRING)
-//    private Status animalStatus;
-//
-//    @Column(nullable = false)
-//    @Enumerated(EnumType.STRING)
-//    private Status ownerStatus;
-
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     private Status status;
