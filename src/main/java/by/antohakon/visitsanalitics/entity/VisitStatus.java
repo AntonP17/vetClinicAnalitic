@@ -11,7 +11,9 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "visit_history")
+@Table(name = "visit_history", indexes = {
+        @Index(columnList = "visitId", name = "visit_history_uuid_index")
+})
 @Builder
 @Data
 @NoArgsConstructor
