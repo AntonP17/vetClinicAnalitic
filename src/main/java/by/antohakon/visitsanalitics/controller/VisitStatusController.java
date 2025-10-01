@@ -2,6 +2,7 @@ package by.antohakon.visitsanalitics.controller;
 
 import by.antohakon.visitsanalitics.dto.VisitStatusDto;
 import by.antohakon.visitsanalitics.service.VisitStatusServiceImpl;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -10,7 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
-
+@Tag(name = "analitics_controller")
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("api/status")
