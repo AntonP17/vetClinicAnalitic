@@ -2,10 +2,7 @@ package by.antohakon.visitsanalitics.entity;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -15,9 +12,11 @@ import java.util.UUID;
         @Index(columnList = "visitId", name = "visit_history_uuid_index")
 })
 @Builder
-@Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Getter
+@Setter
+@ToString
 public class VisitStatus {
 
     @Id

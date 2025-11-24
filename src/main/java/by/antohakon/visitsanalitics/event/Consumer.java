@@ -13,6 +13,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -24,7 +25,6 @@ public class Consumer {
 
     private final VisitStatusRepository visitStatusRepository;
     private final ObjectMapper objectMapper;
-
 
     @KafkaListener(
             topics = "analytics",
@@ -49,7 +49,8 @@ public class Consumer {
         return objectMapper.readValue(message, VisitStatusEventDto.class);
     }
 
-    private void processVisitStatusEvent(VisitStatusEventDto eventDto) {
+    @Transactional
+    public void processVisitStatusEvent(VisitStatusEventDto eventDto) {
         UUID visitId = eventDto.visitId();
         log.info("Processing visit status for visitId: {}", visitId);
 
