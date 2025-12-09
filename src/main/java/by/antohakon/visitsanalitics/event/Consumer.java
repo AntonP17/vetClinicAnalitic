@@ -1,6 +1,7 @@
 package by.antohakon.visitsanalitics.event;
 
 import by.antohakon.visitsanalitics.dto.VisitStatusEventDto;
+import by.antohakon.visitsanalitics.entity.Status;
 import by.antohakon.visitsanalitics.entity.VisitStatus;
 import by.antohakon.visitsanalitics.exceptions.VisitStatusNotFoundException;
 import by.antohakon.visitsanalitics.repository.VisitStatusRepository;
@@ -27,76 +28,87 @@ public class Consumer {
     private final ObjectMapper objectMapper;
 
     @KafkaListener(
-            topics = "analytics",
-            groupId = "analiticGroup",
+            topics = "${kafka.topic.analytics}",
+            groupId = "${kafka.group.analytics}",
             containerFactory = "analiticKafkaListenerContainerFactory"
     )
+    @Transactional
     public void listen(String message) {
-        processKafkaMessage(message);
-    }
-
-    private void processKafkaMessage(String message) {
         try {
-            log.info("Received message: {}", message);
-            VisitStatusEventDto eventDto = parseMessage(message);
+            log.info("Received analytics message: {}", message);
+            VisitStatusEventDto eventDto = objectMapper.readValue(message, VisitStatusEventDto.class);
             processVisitStatusEvent(eventDto);
         } catch (JsonProcessingException e) {
-            log.error("Failed to parse message", e);
+            log.error("Failed to parse analytics message", e);
         }
-    }
-
-    private VisitStatusEventDto parseMessage(String message) throws JsonProcessingException {
-        return objectMapper.readValue(message, VisitStatusEventDto.class);
     }
 
     @Transactional
     public void processVisitStatusEvent(VisitStatusEventDto eventDto) {
         UUID visitId = eventDto.visitId();
-        log.info("Processing visit status for visitId: {}", visitId);
+        log.info("Processing status for visitId: {}, status: {}", visitId, eventDto.status());
 
-        VisitStatus existingStatus = findExistingVisitStatus(visitId);
+        VisitStatus existingStatus = visitStatusRepository.findByVisitId(visitId);
 
         if (existingStatus == null) {
+
             createNewVisitStatus(eventDto);
+            log.info("Created new status for visitId: {}", visitId);
         } else {
-            updateExistingVisitStatus(existingStatus, eventDto);
+            handleStatusUpdate(existingStatus, eventDto);
         }
     }
 
-    @Cacheable(value = "analitics_cache", key = "#visitId")
-    public VisitStatus findExistingVisitStatus(UUID visitId) {
-        log.info("Looking for existing visit status: {}", visitId);
-        return visitStatusRepository.findByVisitId(visitId);
+    private void handleStatusUpdate(VisitStatus existingStatus, VisitStatusEventDto eventDto) {
+        Status newStatus = eventDto.status();
+        Status currentStatus = existingStatus.getStatus();
+
+        // Правила обновления:
+        // 1. FAILED всегда побеждает (перезаписывает любой другой статус)
+        // 2. SUCCESS только если текущий статус не FAILED
+        // 3. PROCESSING может быть обновлен на любой другой статус
+        // 4. Если пытаемся обновить FAILED на SUCCESS - игнорируем
+
+        if (newStatus == Status.FAILED) {
+            // Правило 1: FAILED всегда перезаписывает
+            updateVisitStatus(existingStatus, eventDto);
+            log.info("Updated visit {} from {} to FAILED (rule 1)",
+                    eventDto.visitId(), currentStatus);
+
+        } else if (newStatus == Status.SUCCESS && currentStatus != Status.FAILED) {
+            // Правило 2: SUCCESS только если не FAILED
+            updateVisitStatus(existingStatus, eventDto);
+            log.info("Updated visit {} from {} to SUCCESS (rule 2)",
+                    eventDto.visitId(), currentStatus);
+
+        } else if (newStatus == Status.PROCESSING) {
+            // Правило 3: PROCESSING можно обновить
+            updateVisitStatus(existingStatus, eventDto);
+            log.info("Updated visit {} to PROCESSING (rule 3)", eventDto.visitId());
+
+        } else {
+            // Правило 4: Игнорируем невалидные переходы
+            log.warn("Ignoring invalid status transition for visit {}: {} -> {}",
+                    eventDto.visitId(), currentStatus, newStatus);
+            log.warn("Message details: {}", eventDto.comment());
+        }
     }
 
     private void createNewVisitStatus(VisitStatusEventDto eventDto) {
-        log.info("Creating new visit status for visitId: {}", eventDto.visitId());
-
-        VisitStatus newStatus = buildVisitStatusFromEvent(eventDto);
-        visitStatusRepository.save(newStatus);
-    }
-
-    private void updateExistingVisitStatus(VisitStatus existingStatus, VisitStatusEventDto eventDto) {
-        log.info("Updating existing visit status: {}", eventDto.visitId());
-        log.info("New status data: {}", eventDto);
-
-        updateVisitStatusFields(existingStatus, eventDto);
-        visitStatusRepository.save(existingStatus);
-    }
-
-    private VisitStatus buildVisitStatusFromEvent(VisitStatusEventDto eventDto) {
-        return VisitStatus.builder()
+        VisitStatus newStatus = VisitStatus.builder()
                 .visitId(eventDto.visitId())
                 .historyDate(LocalDateTime.now())
                 .status(eventDto.status())
                 .comment(eventDto.comment())
                 .build();
+        visitStatusRepository.save(newStatus);
     }
 
-    private void updateVisitStatusFields(VisitStatus visitStatus, VisitStatusEventDto eventDto) {
+    private void updateVisitStatus(VisitStatus visitStatus, VisitStatusEventDto eventDto) {
         visitStatus.setHistoryDate(LocalDateTime.now());
         visitStatus.setStatus(eventDto.status());
         visitStatus.setComment(eventDto.comment());
+        visitStatusRepository.save(visitStatus);
     }
 
 }
